@@ -23,7 +23,31 @@ const BOOKING_STATUS = {
     CANCELLED: 'cancelled'
 };
 
-// Socket events
+// Booking item status (cho đồ ăn/uống)
+const BOOKING_ITEM_STATUS = {
+    PENDING: 'pending',      // Vừa gọi, chờ xử lý
+    PREPARING: 'preparing',  // Đang chuẩn bị
+    SERVED: 'served',        // Đã phục vụ
+    CANCELLED: 'cancelled'   // Đã hủy
+};
+
+// Order status (deprecated - giữ để backward compatibility)
+const ORDER_STATUS = {
+    PENDING: 'pending',
+    PREPARING: 'preparing',
+    SERVED: 'served',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled'
+};
+
+// Product categories (deprecated - dùng categories từ database)
+const PRODUCT_CATEGORIES = {
+    DRINKS: 1,
+    FOOD: 2,
+    TOBACCO: 3,
+    BEER: 4
+};
+
 // Socket events
 const SOCKET_EVENTS = {
     // Table events
@@ -42,24 +66,114 @@ const SOCKET_EVENTS = {
     CANCEL_BOOKING: 'cancel-booking',
     CHECK_IN: 'check-in',
     CHECK_OUT: 'check-out',
+    CHECK_AVAILABILITY: 'check-availability',
+    GET_REVENUE_REPORT: 'get-revenue-report',
     
-    // Real-time updates
+    // Invoice events
+    GET_INVOICE: 'get-invoice',
+    GET_TOTAL_AMOUNT: 'get-total-amount',
+    GET_REVENUE_WITH_ORDERS: 'get-revenue-with-orders',
+    
+    // Booking Items events
+    GET_PRODUCTS: 'get-products',
+    GET_CATEGORIES: 'get-categories',
+    ADD_BOOKING_ITEM: 'add-booking-item',
+    UPDATE_BOOKING_ITEM: 'update-booking-item',
+    REMOVE_BOOKING_ITEM: 'remove-booking-item',
+    UPDATE_BOOKING_ITEM_STATUS: 'update-booking-item-status',
+    GET_BOOKING_ITEMS: 'get-booking-items',
+    
+    // Product Management Events (THÊM MỚI)
+    GET_PRODUCT_BY_ID: 'get-product-by-id',
+    CREATE_PRODUCT: 'create-product',
+    UPDATE_PRODUCT: 'update-product',
+    DELETE_PRODUCT: 'delete-product',
+    
+    // Category Management Events (THÊM MỚI)
+    GET_CATEGORY_BY_ID: 'get-category-by-id',
+    CREATE_CATEGORY: 'create-category',
+    UPDATE_CATEGORY: 'update-category',
+    DELETE_CATEGORY: 'delete-category',
+    
+    // Order events (DEPRECATED - giữ để tránh lỗi nhưng không dùng)
+    GET_ORDERS_BY_BOOKING: 'get-orders-by-booking',
+    CREATE_ORDER: 'create-order',
+    ADD_ORDER_ITEM: 'add-order-item',
+    UPDATE_ORDER_ITEM: 'update-order-item',
+    REMOVE_ORDER_ITEM: 'remove-order-item',
+    UPDATE_ORDER_STATUS: 'update-order-status',
+    CANCEL_ORDER: 'cancel-order',
+    
+    // Real-time updates - Tables & Bookings
     TABLE_CREATED: 'table-created',
     TABLE_UPDATED: 'table-updated',
     TABLE_DELETED: 'table-deleted',
     TABLE_STATUS_CHANGED: 'table-status-changed',
+    
     NEW_BOOKING: 'new-booking',
     BOOKING_UPDATED: 'booking-updated',
     BOOKING_CANCELLED: 'booking-cancelled',
+    
+    // Booking Items real-time updates
+    BOOKING_ITEM_ADDED: 'booking-item-added',
+    BOOKING_ITEM_UPDATED: 'booking-item-updated',
+    BOOKING_ITEM_REMOVED: 'booking-item-removed',
+    BOOKING_ITEM_STATUS_CHANGED: 'booking-item-status-changed',
+    
+    // Product real-time updates (THÊM MỚI)
+    PRODUCT_CREATED: 'product-created',
+    PRODUCT_UPDATED: 'product-updated',
+    PRODUCT_DELETED: 'product-deleted',
+    
+    // Category real-time updates (THÊM MỚI)
+    CATEGORY_CREATED: 'category-created',
+    CATEGORY_UPDATED: 'category-updated',
+    CATEGORY_DELETED: 'category-deleted',
+    
+    // Order real-time updates (DEPRECATED)
+    ORDER_CREATED: 'order-created',
+    ORDER_UPDATED: 'order-updated',
+    ORDER_CANCELLED: 'order-cancelled',
+    
+    // Room events
+    JOIN_TABLE_ROOM: 'join-table-room',
+    LEAVE_TABLE_ROOM: 'leave-table-room',
+    JOIN_KITCHEN_ROOM: 'join-kitchen-room',
+    LEAVE_KITCHEN_ROOM: 'leave-kitchen-room',
     
     // Response
     ERROR: 'error',
     SUCCESS: 'success'
 };
 
+// Price per hour by table type
+const PRICE_PER_HOUR = {
+    standard: 50000,
+    vip: 100000,
+    tournament: 150000
+};
+
+// Operating hours
+const OPERATING_HOURS = {
+    START: 6,
+    END: 23
+};
+
+// Timezone
+const TIMEZONE = {
+    VIETNAM: 'Asia/Ho_Chi_Minh',
+    UTC: 'UTC'
+};
+
 module.exports = {
     TABLE_STATUS,
     TABLE_TYPE,
     BOOKING_STATUS,
-    SOCKET_EVENTS
+    BOOKING_ITEM_STATUS,
+    ORDER_STATUS, // Giữ lại để backward compatibility
+    PRODUCT_CATEGORIES,
+    SOCKET_EVENTS,
+    PRICE_PER_HOUR,
+    OPERATING_HOURS,
+    TIMEZONE
 };

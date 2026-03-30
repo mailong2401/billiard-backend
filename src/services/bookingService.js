@@ -1,7 +1,7 @@
 const Booking = require('../models/Booking');
 const Table = require('../models/Table');
 const { BOOKING_STATUS } = require('../utils/constants');
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 class BookingService {
     // Get all bookings

@@ -1,5 +1,6 @@
-const TableController = require('../controllers/tableController');
-const BookingController = require('../controllers/bookingController');
+const TableController = require('../controllers/TableController');
+const BookingController = require('../controllers/BookingController');
+const ProductController = require('../controllers/ProductController');
 const { SOCKET_EVENTS } = require('../utils/constants');
 
 class SocketHandler {
@@ -7,13 +8,14 @@ class SocketHandler {
         this.io = io;
         this.tableController = new TableController(io);
         this.bookingController = new BookingController(io);
+        this.productController = new ProductController(io);
     }
     
     initialize() {
         this.io.on('connection', (socket) => {
             console.log(`🟢 Client connected: ${socket.id}`);
             
-            // Table events
+            // ========== TABLE EVENTS ==========
             socket.on(SOCKET_EVENTS.GET_TABLES, (data, callback) => 
                 this.tableController.handleGetTables(socket, data, callback)
             );
@@ -38,7 +40,7 @@ class SocketHandler {
                 this.tableController.handleUpdateTableStatus(socket, data, callback)
             );
             
-            // Booking events
+            // ========== BOOKING EVENTS ==========
             socket.on(SOCKET_EVENTS.GET_BOOKINGS, (data, callback) => 
                 this.bookingController.handleGetBookings(socket, data, callback)
             );
@@ -67,13 +69,106 @@ class SocketHandler {
                 this.bookingController.handleCheckOut(socket, data, callback)
             );
             
-            socket.on('check-availability', (data, callback) => 
+            socket.on(SOCKET_EVENTS.CHECK_AVAILABILITY, (data, callback) => 
                 this.bookingController.handleCheckAvailability(socket, data, callback)
             );
             
-            socket.on('get-revenue-report', (data, callback) => 
+            socket.on(SOCKET_EVENTS.GET_REVENUE_REPORT, (data, callback) => 
                 this.bookingController.handleGetRevenueReport(socket, data, callback)
             );
+            
+            // ========== BOOKING ITEMS EVENTS ==========
+            socket.on(SOCKET_EVENTS.GET_INVOICE, (data, callback) => 
+                this.bookingController.handleGetInvoice(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.ADD_BOOKING_ITEM, (data, callback) => 
+                this.bookingController.handleAddBookingItem(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.UPDATE_BOOKING_ITEM, (data, callback) => 
+                this.bookingController.handleUpdateBookingItem(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.REMOVE_BOOKING_ITEM, (data, callback) => 
+                this.bookingController.handleRemoveBookingItem(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.UPDATE_BOOKING_ITEM_STATUS, (data, callback) => 
+                this.bookingController.handleUpdateBookingItemStatus(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.GET_BOOKING_ITEMS, (data, callback) => 
+                this.bookingController.handleGetBookingItems(socket, data, callback)
+            );
+            
+            // ========== PRODUCT EVENTS ==========
+            socket.on(SOCKET_EVENTS.GET_PRODUCTS, (data, callback) => 
+                this.productController.handleGetProducts(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.GET_PRODUCT_BY_ID, (data, callback) => 
+                this.productController.handleGetProductById(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.CREATE_PRODUCT, (data, callback) => 
+                this.productController.handleCreateProduct(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.UPDATE_PRODUCT, (data, callback) => 
+                this.productController.handleUpdateProduct(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.DELETE_PRODUCT, (data, callback) => 
+                this.productController.handleDeleteProduct(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.GET_CATEGORIES, (data, callback) => 
+                this.productController.handleGetCategories(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.GET_CATEGORY_BY_ID, (data, callback) => 
+                this.productController.handleGetCategoryById(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.CREATE_CATEGORY, (data, callback) => 
+                this.productController.handleCreateCategory(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.UPDATE_CATEGORY, (data, callback) => 
+                this.productController.handleUpdateCategory(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.DELETE_CATEGORY, (data, callback) => 
+                this.productController.handleDeleteCategory(socket, data, callback)
+            );
+            
+            // ========== ROOM EVENTS ==========
+            socket.on(SOCKET_EVENTS.JOIN_TABLE_ROOM, (data) => {
+                const { tableId } = data;
+                if (tableId) {
+                    socket.join(`table-${tableId}`);
+                    console.log(`Socket ${socket.id} joined room table-${tableId}`);
+                }
+            });
+            
+            socket.on(SOCKET_EVENTS.LEAVE_TABLE_ROOM, (data) => {
+                const { tableId } = data;
+                if (tableId) {
+                    socket.leave(`table-${tableId}`);
+                    console.log(`Socket ${socket.id} left room table-${tableId}`);
+                }
+            });
+            
+            socket.on(SOCKET_EVENTS.JOIN_KITCHEN_ROOM, () => {
+                socket.join('kitchen-room');
+                console.log(`Socket ${socket.id} joined kitchen-room`);
+            });
+            
+            socket.on(SOCKET_EVENTS.LEAVE_KITCHEN_ROOM, () => {
+                socket.leave('kitchen-room');
+                console.log(`Socket ${socket.id} left kitchen-room`);
+            });
             
             // Disconnect
             socket.on('disconnect', () => {
