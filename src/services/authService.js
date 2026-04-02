@@ -29,6 +29,25 @@ class AuthService {
         }
     }
     
+    // Get current user from token
+    async getCurrentUserByToken(token) {
+        const decoded = this.verifyToken(token);
+        if (!decoded) {
+            throw new Error('Invalid or expired token');
+        }
+        
+        const user = await User.getById(decoded.id);
+        if (!user) {
+            throw new Error('User not found');
+        }
+        
+        if (!user.is_active) {
+            throw new Error('Account is disabled');
+        }
+        
+        return user;
+    }
+    
     // Login
     async login(username, password) {
         const user = await User.getByUsername(username);
@@ -86,7 +105,7 @@ class AuthService {
         };
     }
     
-    // Get current user
+    // Get current user by ID
     async getCurrentUser(userId) {
         const user = await User.getById(userId);
         if (!user) {

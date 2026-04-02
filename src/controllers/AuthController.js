@@ -48,7 +48,7 @@ class AuthController {
                 password,
                 full_name,
                 phone,
-                role: 'client' // Default role for registration
+                role: 'client'
             });
             
             callback({
@@ -66,16 +66,16 @@ class AuthController {
         }
     }
     
-    // Get current user
+    // Get current user from token
     async handleGetCurrentUser(socket, data, callback) {
         try {
-            const { userId } = data;
+            const { token } = data;
             
-            if (!userId) {
-                throw new Error('User ID required');
+            if (!token) {
+                throw new Error('Token required');
             }
             
-            const user = await this.authService.getCurrentUser(userId);
+            const user = await this.authService.getCurrentUserByToken(token);
             
             callback({
                 success: true,
