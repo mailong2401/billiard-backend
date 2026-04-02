@@ -23,15 +23,15 @@ const BOOKING_STATUS = {
     CANCELLED: 'cancelled'
 };
 
-// Booking item status (cho đồ ăn/uống)
+// Booking item status
 const BOOKING_ITEM_STATUS = {
-    PENDING: 'pending',      // Vừa gọi, chờ xử lý
-    PREPARING: 'preparing',  // Đang chuẩn bị
-    SERVED: 'served',        // Đã phục vụ
-    CANCELLED: 'cancelled'   // Đã hủy
+    PENDING: 'pending',
+    PREPARING: 'preparing',
+    SERVED: 'served',
+    CANCELLED: 'cancelled'
 };
 
-// Order status (deprecated - giữ để backward compatibility)
+// Order status (deprecated)
 const ORDER_STATUS = {
     PENDING: 'pending',
     PREPARING: 'preparing',
@@ -40,7 +40,7 @@ const ORDER_STATUS = {
     CANCELLED: 'cancelled'
 };
 
-// Product categories (deprecated - dùng categories từ database)
+// Product categories (deprecated)
 const PRODUCT_CATEGORIES = {
     DRINKS: 1,
     FOOD: 2,
@@ -53,6 +53,7 @@ const SOCKET_EVENTS = {
     // Table events
     GET_TABLES: 'get-tables',
     GET_TABLE_BY_ID: 'get-table-by-id',
+    GET_TABLES_FULL: 'get-tables-full',
     CREATE_TABLE: 'create-table',
     UPDATE_TABLE: 'update-table',
     DELETE_TABLE: 'delete-table',
@@ -83,19 +84,23 @@ const SOCKET_EVENTS = {
     UPDATE_BOOKING_ITEM_STATUS: 'update-booking-item-status',
     GET_BOOKING_ITEMS: 'get-booking-items',
     
-    // Product Management Events (THÊM MỚI)
+    // Realtime amount events
+    GET_REALTIME_AMOUNT: 'get-realtime-amount',
+    BOOKING_AMOUNT_UPDATED: 'booking-amount-updated',
+    
+    // Product Management Events
     GET_PRODUCT_BY_ID: 'get-product-by-id',
     CREATE_PRODUCT: 'create-product',
     UPDATE_PRODUCT: 'update-product',
     DELETE_PRODUCT: 'delete-product',
     
-    // Category Management Events (THÊM MỚI)
+    // Category Management Events
     GET_CATEGORY_BY_ID: 'get-category-by-id',
     CREATE_CATEGORY: 'create-category',
     UPDATE_CATEGORY: 'update-category',
     DELETE_CATEGORY: 'delete-category',
     
-    // Order events (DEPRECATED - giữ để tránh lỗi nhưng không dùng)
+    // Order events (DEPRECATED)
     GET_ORDERS_BY_BOOKING: 'get-orders-by-booking',
     CREATE_ORDER: 'create-order',
     ADD_ORDER_ITEM: 'add-order-item',
@@ -104,7 +109,7 @@ const SOCKET_EVENTS = {
     UPDATE_ORDER_STATUS: 'update-order-status',
     CANCEL_ORDER: 'cancel-order',
     
-    // Real-time updates - Tables & Bookings
+    // Real-time updates
     TABLE_CREATED: 'table-created',
     TABLE_UPDATED: 'table-updated',
     TABLE_DELETED: 'table-deleted',
@@ -114,23 +119,19 @@ const SOCKET_EVENTS = {
     BOOKING_UPDATED: 'booking-updated',
     BOOKING_CANCELLED: 'booking-cancelled',
     
-    // Booking Items real-time updates
     BOOKING_ITEM_ADDED: 'booking-item-added',
     BOOKING_ITEM_UPDATED: 'booking-item-updated',
     BOOKING_ITEM_REMOVED: 'booking-item-removed',
     BOOKING_ITEM_STATUS_CHANGED: 'booking-item-status-changed',
     
-    // Product real-time updates (THÊM MỚI)
     PRODUCT_CREATED: 'product-created',
     PRODUCT_UPDATED: 'product-updated',
     PRODUCT_DELETED: 'product-deleted',
     
-    // Category real-time updates (THÊM MỚI)
     CATEGORY_CREATED: 'category-created',
     CATEGORY_UPDATED: 'category-updated',
     CATEGORY_DELETED: 'category-deleted',
     
-    // Order real-time updates (DEPRECATED)
     ORDER_CREATED: 'order-created',
     ORDER_UPDATED: 'order-updated',
     ORDER_CANCELLED: 'order-cancelled',
@@ -170,7 +171,7 @@ module.exports = {
     TABLE_TYPE,
     BOOKING_STATUS,
     BOOKING_ITEM_STATUS,
-    ORDER_STATUS, // Giữ lại để backward compatibility
+    ORDER_STATUS,
     PRODUCT_CATEGORIES,
     SOCKET_EVENTS,
     PRICE_PER_HOUR,

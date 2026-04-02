@@ -1,6 +1,7 @@
 const TableController = require('../controllers/TableController');
 const BookingController = require('../controllers/BookingController');
 const ProductController = require('../controllers/ProductController');
+const Table = require('../models/Table'); // Thêm import Table model
 const { SOCKET_EVENTS } = require('../utils/constants');
 
 class SocketHandler {
@@ -39,6 +40,17 @@ class SocketHandler {
             socket.on(SOCKET_EVENTS.UPDATE_TABLE_STATUS, (data, callback) => 
                 this.tableController.handleUpdateTableStatus(socket, data, callback)
             );
+
+            // Event lấy tất cả bàn kèm thông tin booking đang hoạt động
+            socket.on('get-tables-full', async (_, callback) => {
+                try {
+                    const tables = await Table.getAllWithBooking();
+                    callback({ success: true, data: tables });
+                } catch (err) {
+                    console.error('Error in get-tables-full:', err);
+                    callback({ success: false, error: err.message });
+                }
+            });
             
             // ========== BOOKING EVENTS ==========
             socket.on(SOCKET_EVENTS.GET_BOOKINGS, (data, callback) => 
@@ -100,6 +112,10 @@ class SocketHandler {
             
             socket.on(SOCKET_EVENTS.GET_BOOKING_ITEMS, (data, callback) => 
                 this.bookingController.handleGetBookingItems(socket, data, callback)
+            );
+            
+            socket.on(SOCKET_EVENTS.GET_REALTIME_AMOUNT, (data, callback) => 
+                this.bookingController.handleGetRealtimeAmount(socket, data, callback)
             );
             
             // ========== PRODUCT EVENTS ==========

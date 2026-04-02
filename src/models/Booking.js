@@ -3,6 +3,9 @@ const { BOOKING_STATUS } = require('../utils/constants');
 const moment = require('moment-timezone');
 
 class Booking {
+    // Store intervals for realtime updates
+    static realtimeIntervals = {};
+
     // Generate booking code
     static generateBookingCode() {
         const date = new Date();
@@ -47,7 +50,6 @@ class Booking {
         
         const [rows] = await pool.execute(query, values);
         
-        // Lấy thêm items cho mỗi booking
         for (let booking of rows) {
             const items = await this.getBookingItems(booking.id);
             booking.items = items;
@@ -132,7 +134,7 @@ class Booking {
                                    start_time, end_time, duration_hours, total_amount, notes, created_by, status)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [bookingCode, table_id, customer_name, customer_phone, start_time, end_time, 
-             duration_hours, total_amount, notes, created_by, BOOKING_STATUS.PENDING]
+             duration_hours, total_amount || 0, notes, created_by, BOOKING_STATUS.PENDING]
         );
         
         return this.getById(result.insertId);
@@ -175,7 +177,6 @@ class Booking {
     
     // Add item to booking
     static async addBookingItem(bookingId, productId, quantity, notes = null) {
-        // Get product price
         const [product] = await pool.execute(
             'SELECT price, name FROM products WHERE id = ?',
             [productId]
@@ -239,7 +240,7 @@ class Booking {
         return rows[0] || null;
     }
     
-    // Update booking item status (for kitchen)
+    // Update booking item status
     static async updateBookingItemStatus(itemId, status) {
         await pool.execute(
             'UPDATE booking_items SET status = ? WHERE id = ?',
@@ -253,67 +254,176 @@ class Booking {
         const booking = await this.getById(id);
         if (!booking) return null;
         
+        this.stopRealtimeUpdates(id);
+        
         await pool.execute(
             'UPDATE bookings SET status = ?, notes = CONCAT(notes, ?) WHERE id = ?',
             [BOOKING_STATUS.CANCELLED, reason ? `\nHủy vì: ${reason}` : '', id]
         );
         
+        const Table = require('./Table');
+        if (booking.status === 'reserved') {
+            await Table.updateStatus(booking.table_id, 'available');
+        } else if (booking.status === 'checked_in') {
+            await Table.updateStatus(booking.table_id, 'available');
+        }
+        
         return this.getById(id);
     }
     
     // Check-in
-    static async checkIn(id) {
+    static async checkIn(id, io = null) {
         const booking = await this.getById(id);
         if (!booking) return null;
         
         const actualStartTime = moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm:ss');
         
         await pool.execute(
-            'UPDATE bookings SET status = ?, start_time = ? WHERE id = ?',
+            'UPDATE bookings SET status = ?, start_time = ?, total_amount = 0 WHERE id = ?',
             [BOOKING_STATUS.CHECKED_IN, actualStartTime, id]
         );
         
         const Table = require('./Table');
         await Table.updateStatus(booking.table_id, 'occupied');
         
+        if (io) {
+            this.startRealtimeUpdates(io, id);
+        }
+        
         return this.getById(id);
     }
     
-    // Check-out - Tính tổng tiền bàn + đồ ăn
-    static async checkOut(id, actualEndTime) {
+    // Check-out
+    static async checkOut(id, actualEndTime, io = null) {
         const booking = await this.getById(id);
         if (!booking) return null;
         
-        // Tính tổng tiền đồ ăn
-        const items = await this.getBookingItems(id);
-        const foodTotal = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
-        const totalAmount = Number(booking.total_amount) + foodTotal;
-        
-        await pool.execute(
-            `UPDATE bookings SET status = ?, end_time = ?, total_amount = ? WHERE id = ?`,
-            [BOOKING_STATUS.COMPLETED, actualEndTime, totalAmount, id]
-        );
+        this.stopRealtimeUpdates(id);
         
         const Table = require('./Table');
+        const table = await Table.getById(booking.table_id);
+        
+        if (!table) {
+            throw new Error('Table not found');
+        }
+        
+        const start = moment(booking.start_time).tz('Asia/Ho_Chi_Minh');
+        const end = moment(actualEndTime).tz('Asia/Ho_Chi_Minh');
+        const hoursPlayed = end.diff(start, 'hours', true);
+        
+        const actualTableAmount = Math.ceil(hoursPlayed) * table.price_per_hour;
+        
+        const items = await this.getBookingItems(id);
+        const foodTotal = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+        
+        const totalAmount = actualTableAmount + foodTotal;
+        
+        await pool.execute(
+            `UPDATE bookings SET 
+                status = ?, 
+                end_time = ?, 
+                total_amount = ?,
+                duration_hours = ?
+            WHERE id = ?`,
+            [BOOKING_STATUS.COMPLETED, actualEndTime, totalAmount, hoursPlayed, id]
+        );
+        
         await Table.updateStatus(booking.table_id, 'available');
         
         const updatedBooking = await this.getById(id);
+        
         return {
             ...updatedBooking,
-            table_amount: booking.total_amount,
+            table_amount: actualTableAmount,
             food_amount: foodTotal,
-            total_amount: totalAmount
+            total_amount: totalAmount,
+            hours_played: hoursPlayed
         };
     }
     
-    // Get detailed invoice with all items
+    // Update realtime amount
+    static async updateRealtimeAmount(id) {
+        const booking = await this.getById(id);
+        if (!booking || booking.status !== 'checked_in') return null;
+        
+        const Table = require('./Table');
+        const table = await Table.getById(booking.table_id);
+        
+        if (!table) return null;
+        
+        const start = moment(booking.start_time).tz('Asia/Ho_Chi_Minh');
+        const now = moment().tz('Asia/Ho_Chi_Minh');
+        const hoursPlayed = now.diff(start, 'hours', true);
+        
+        const currentTableAmount = Math.ceil(hoursPlayed) * table.price_per_hour;
+        
+        const items = await this.getBookingItems(id);
+        const foodTotal = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+        
+        const currentTotal = currentTableAmount + foodTotal;
+        
+        await pool.execute(
+            'UPDATE bookings SET total_amount = ? WHERE id = ?',
+            [currentTotal, id]
+        );
+        
+        return {
+            booking_id: id,
+            table_amount: currentTableAmount,
+            food_amount: foodTotal,
+            total_amount: currentTotal,
+            hours_played: hoursPlayed
+        };
+    }
+    
+    // Start realtime updates
+    static startRealtimeUpdates(io, bookingId) {
+        if (this.realtimeIntervals[bookingId]) {
+            clearInterval(this.realtimeIntervals[bookingId]);
+        }
+        
+        console.log(`Starting realtime updates for booking ${bookingId}`);
+        
+        this.realtimeIntervals[bookingId] = setInterval(async () => {
+            try {
+                const updateData = await this.updateRealtimeAmount(bookingId);
+                if (updateData && io) {
+                    const booking = await this.getById(bookingId);
+                    if (booking) {
+                        io.to(`table-${booking.table_id}`).emit('booking-amount-updated', {
+                            booking_id: bookingId,
+                            table_id: booking.table_id,
+                            ...updateData
+                        });
+                        io.emit('booking-updated', {
+                            ...booking,
+                            total_amount: updateData.total_amount,
+                            food_total: updateData.food_amount
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error(`Error updating realtime amount for booking ${bookingId}:`, error);
+            }
+        }, 10000);
+    }
+    
+    // Stop realtime updates
+    static stopRealtimeUpdates(bookingId) {
+        if (this.realtimeIntervals[bookingId]) {
+            clearInterval(this.realtimeIntervals[bookingId]);
+            delete this.realtimeIntervals[bookingId];
+            console.log(`Stopped realtime updates for booking ${bookingId}`);
+        }
+    }
+    
+    // Get detailed invoice
     static async getInvoice(bookingId) {
         const booking = await this.getById(bookingId);
         if (!booking) return null;
         
         const items = await this.getBookingItems(bookingId);
         
-        // Group items by status
         const pendingItems = items.filter(item => item.status === 'pending');
         const preparingItems = items.filter(item => item.status === 'preparing');
         const servedItems = items.filter(item => item.status === 'served');
@@ -356,22 +466,15 @@ class Booking {
         return rows;
     }
     
-    // Get revenue by date range (including food)
+    // Get revenue by date range
     static async getRevenueWithOrders(startDate, endDate) {
         const [revenue] = await pool.execute(
             `SELECT DATE(start_time) as date, 
                     COUNT(*) as total_bookings,
-                    SUM(total_amount) as table_revenue,
-                    SUM(food_total) as food_revenue,
-                    SUM(total_amount + food_total) as total_revenue
-             FROM (
-                 SELECT b.*, COALESCE(SUM(bi.subtotal), 0) as food_total
-                 FROM bookings b
-                 LEFT JOIN booking_items bi ON b.id = bi.booking_id
-                 WHERE b.status = 'completed' 
-                 AND DATE(b.start_time) BETWEEN ? AND ?
-                 GROUP BY b.id
-             ) as booking_with_food
+                    SUM(total_amount) as total_revenue
+             FROM bookings 
+             WHERE status = 'completed' 
+             AND DATE(start_time) BETWEEN ? AND ?
              GROUP BY DATE(start_time)
              ORDER BY date`,
             [startDate, endDate]
@@ -380,7 +483,7 @@ class Booking {
         return revenue;
     }
     
-    // Check table availability for time slot
+    // Check table availability
     static async checkAvailability(tableId, startTime, endTime) {
         const [rows] = await pool.execute(
             `SELECT * FROM bookings 

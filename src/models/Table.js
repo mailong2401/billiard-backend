@@ -111,6 +111,52 @@ class Table {
             throw error;
         }
     }
+  
+  // Thêm method này vào class Table
+static async getAllWithBooking() {
+    const [rows] = await pool.execute(`
+        SELECT 
+            t.*,
+            b.id as booking_id,
+            b.start_time,
+            b.customer_name,
+            b.customer_phone,
+            b.total_amount as booking_total_amount,
+            (
+                SELECT COALESCE(SUM(bi.subtotal), 0)
+                FROM booking_items bi
+                WHERE bi.booking_id = b.id
+            ) as food_total
+        FROM tables t
+        LEFT JOIN bookings b 
+            ON t.id = b.table_id 
+            AND b.status = 'checked_in'
+        WHERE t.is_active = 1
+        ORDER BY t.table_number
+    `);
+
+    // Tính tiền realtime cho các bàn đang chơi
+    for (const table of rows) {
+        if (table.booking_id && table.start_time) {
+            const startTime = new Date(table.start_time);
+            const now = new Date();
+            const hoursPlayed = Math.max(0, (now.getTime() - startTime.getTime()) / (1000 * 60 * 60));
+            const currentTableAmount = Math.ceil(hoursPlayed) * table.price_per_hour;
+            
+            table.current_table_amount = currentTableAmount;
+            table.hours_played = hoursPlayed;
+            table.food_total = Number(table.food_total) || 0;
+            table.current_total_amount = currentTableAmount + (table.food_total || 0);
+        } else {
+            table.current_table_amount = 0;
+            table.hours_played = 0;
+            table.food_total = 0;
+            table.current_total_amount = 0;
+        }
+    }
+
+    return rows;
+}
     
     // Update table status
     static async updateStatus(id, status) {
