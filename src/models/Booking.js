@@ -25,92 +25,97 @@ class Booking {
             WHERE 1=1
         `;
         const values = [];
+        let paramCount = 1;
         
         if (filters.status) {
-            query += ' AND b.status = ?';
+            query += ` AND b.status = $${paramCount}`;
             values.push(filters.status);
+            paramCount++;
         }
         
         if (filters.table_id) {
-            query += ' AND b.table_id = ?';
+            query += ` AND b.table_id = $${paramCount}`;
             values.push(filters.table_id);
+            paramCount++;
         }
         
         if (filters.date) {
-            query += ' AND DATE(b.start_time) = ?';
+            query += ` AND DATE(b.start_time) = $${paramCount}`;
             values.push(filters.date);
+            paramCount++;
         }
         
         if (filters.customer_phone) {
-            query += ' AND b.customer_phone LIKE ?';
+            query += ` AND b.customer_phone LIKE $${paramCount}`;
             values.push(`%${filters.customer_phone}%`);
+            paramCount++;
         }
         
         query += ' ORDER BY b.start_time DESC';
         
-        const [rows] = await pool.execute(query, values);
+        const result = await pool.query(query, values);
         
-        for (let booking of rows) {
+        for (let booking of result.rows) {
             const items = await this.getBookingItems(booking.id);
             booking.items = items;
             booking.food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
             booking.total_with_food = Number(booking.total_amount) + booking.food_total;
         }
         
-        return rows;
+        return result.rows;
     }
     
     // Get booking items
     static async getBookingItems(bookingId) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT bi.*, p.name as product_name, p.price as product_price
              FROM booking_items bi
              LEFT JOIN products p ON bi.product_id = p.id
-             WHERE bi.booking_id = ?
+             WHERE bi.booking_id = $1
              ORDER BY bi.created_at ASC`,
             [bookingId]
         );
-        return rows;
+        return result.rows;
     }
     
     // Get booking by ID
     static async getById(id) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT b.*, t.table_number, t.table_name, t.table_type, t.price_per_hour 
              FROM bookings b 
              LEFT JOIN tables t ON b.table_id = t.id 
-             WHERE b.id = ?`,
+             WHERE b.id = $1`,
             [id]
         );
         
-        if (rows[0]) {
+        if (result.rows[0]) {
             const items = await this.getBookingItems(id);
-            rows[0].items = items;
-            rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
-            rows[0].total_with_food = Number(rows[0].total_amount) + rows[0].food_total;
+            result.rows[0].items = items;
+            result.rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+            result.rows[0].total_with_food = Number(result.rows[0].total_amount) + result.rows[0].food_total;
         }
         
-        return rows[0] || null;
+        return result.rows[0] || null;
     }
     
     // Get booking by code
     static async getByCode(bookingCode) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT b.*, t.table_number, t.table_name, t.table_type 
              FROM bookings b 
              LEFT JOIN tables t ON b.table_id = t.id 
-             WHERE b.booking_code = ?`,
+             WHERE b.booking_code = $1`,
             [bookingCode]
         );
         
-        if (rows[0]) {
-            const items = await this.getBookingItems(rows[0].id);
-            rows[0].items = items;
-            rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
-            rows[0].total_with_food = Number(rows[0].total_amount) + rows[0].food_total;
+        if (result.rows[0]) {
+            const items = await this.getBookingItems(result.rows[0].id);
+            result.rows[0].items = items;
+            result.rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
+            result.rows[0].total_with_food = Number(result.rows[0].total_amount) + result.rows[0].food_total;
         }
         
-        return rows[0] || null;
+        return result.rows[0] || null;
     }
     
     // Create new booking
@@ -129,37 +134,40 @@ class Booking {
         
         const bookingCode = this.generateBookingCode();
         
-        const [result] = await pool.execute(
+        const result = await pool.query(
             `INSERT INTO bookings (booking_code, table_id, customer_name, customer_phone, 
                                    start_time, end_time, duration_hours, total_amount, notes, created_by, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             RETURNING id`,
             [bookingCode, table_id, customer_name, customer_phone, start_time, end_time, 
              duration_hours, total_amount || 0, notes, created_by, BOOKING_STATUS.PENDING]
         );
         
-        return this.getById(result.insertId);
+        return this.getById(result.rows[0].id);
     }
     
     // Update booking
     static async update(id, data) {
         const updates = [];
         const values = [];
+        let paramCount = 1;
         
         const allowedFields = ['customer_name', 'customer_phone', 'start_time', 'end_time', 
                                'duration_hours', 'total_amount', 'notes', 'status'];
         
         for (const field of allowedFields) {
             if (data[field] !== undefined) {
-                updates.push(`${field} = ?`);
+                updates.push(`${field} = $${paramCount}`);
                 values.push(data[field]);
+                paramCount++;
             }
         }
         
         if (updates.length === 0) return null;
         
         values.push(id);
-        await pool.execute(
-            `UPDATE bookings SET ${updates.join(', ')} WHERE id = ?`,
+        await pool.query(
+            `UPDATE bookings SET ${updates.join(', ')} WHERE id = $${paramCount}`,
             values
         );
         
@@ -168,8 +176,8 @@ class Booking {
     
     // Update booking status
     static async updateStatus(id, status) {
-        await pool.execute(
-            'UPDATE bookings SET status = ? WHERE id = ?',
+        await pool.query(
+            'UPDATE bookings SET status = $1 WHERE id = $2',
             [status, id]
         );
         return this.getById(id);
@@ -177,42 +185,43 @@ class Booking {
     
     // Add item to booking
     static async addBookingItem(bookingId, productId, quantity, notes = null) {
-        const [product] = await pool.execute(
-            'SELECT price, name FROM products WHERE id = ?',
+        const productResult = await pool.query(
+            'SELECT price, name FROM products WHERE id = $1',
             [productId]
         );
         
-        if (!product[0]) {
+        if (!productResult.rows[0]) {
             throw new Error('Product not found');
         }
         
-        const price = product[0].price;
+        const price = productResult.rows[0].price;
         const subtotal = price * quantity;
         
-        const [result] = await pool.execute(
+        const result = await pool.query(
             `INSERT INTO booking_items (booking_id, product_id, quantity, price, subtotal, notes, status)
-             VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
+             VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+             RETURNING id`,
             [bookingId, productId, quantity, price, subtotal, notes]
         );
         
-        return this.getBookingItemById(result.insertId);
+        return this.getBookingItemById(result.rows[0].id);
     }
     
     // Update booking item
     static async updateBookingItem(itemId, quantity) {
-        const [item] = await pool.execute(
-            'SELECT * FROM booking_items WHERE id = ?',
+        const itemResult = await pool.query(
+            'SELECT * FROM booking_items WHERE id = $1',
             [itemId]
         );
         
-        if (!item[0]) {
+        if (!itemResult.rows[0]) {
             throw new Error('Item not found');
         }
         
-        const subtotal = item[0].price * quantity;
+        const subtotal = itemResult.rows[0].price * quantity;
         
-        await pool.execute(
-            'UPDATE booking_items SET quantity = ?, subtotal = ? WHERE id = ?',
+        await pool.query(
+            'UPDATE booking_items SET quantity = $1, subtotal = $2 WHERE id = $3',
             [quantity, subtotal, itemId]
         );
         
@@ -221,8 +230,8 @@ class Booking {
     
     // Remove booking item
     static async removeBookingItem(itemId) {
-        await pool.execute(
-            'DELETE FROM booking_items WHERE id = ?',
+        await pool.query(
+            'DELETE FROM booking_items WHERE id = $1',
             [itemId]
         );
         return true;
@@ -230,20 +239,20 @@ class Booking {
     
     // Get booking item by ID
     static async getBookingItemById(itemId) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT bi.*, p.name as product_name
              FROM booking_items bi
              LEFT JOIN products p ON bi.product_id = p.id
-             WHERE bi.id = ?`,
+             WHERE bi.id = $1`,
             [itemId]
         );
-        return rows[0] || null;
+        return result.rows[0] || null;
     }
     
     // Update booking item status
     static async updateBookingItemStatus(itemId, status) {
-        await pool.execute(
-            'UPDATE booking_items SET status = ? WHERE id = ?',
+        await pool.query(
+            'UPDATE booking_items SET status = $1 WHERE id = $2',
             [status, itemId]
         );
         return this.getBookingItemById(itemId);
@@ -256,8 +265,8 @@ class Booking {
         
         this.stopRealtimeUpdates(id);
         
-        await pool.execute(
-            'UPDATE bookings SET status = ?, notes = CONCAT(notes, ?) WHERE id = ?',
+        await pool.query(
+            'UPDATE bookings SET status = $1, notes = CONCAT(notes, $2) WHERE id = $3',
             [BOOKING_STATUS.CANCELLED, reason ? `\nHủy vì: ${reason}` : '', id]
         );
         
@@ -278,8 +287,8 @@ class Booking {
         
         const actualStartTime = moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm:ss');
         
-        await pool.execute(
-            'UPDATE bookings SET status = ?, start_time = ?, total_amount = 0 WHERE id = ?',
+        await pool.query(
+            'UPDATE bookings SET status = $1, start_time = $2, total_amount = 0 WHERE id = $3',
             [BOOKING_STATUS.CHECKED_IN, actualStartTime, id]
         );
         
@@ -318,13 +327,13 @@ class Booking {
         
         const totalAmount = actualTableAmount + foodTotal;
         
-        await pool.execute(
+        await pool.query(
             `UPDATE bookings SET 
-                status = ?, 
-                end_time = ?, 
-                total_amount = ?,
-                duration_hours = ?
-            WHERE id = ?`,
+                status = $1, 
+                end_time = $2, 
+                total_amount = $3,
+                duration_hours = $4
+            WHERE id = $5`,
             [BOOKING_STATUS.COMPLETED, actualEndTime, totalAmount, hoursPlayed, id]
         );
         
@@ -362,8 +371,8 @@ class Booking {
         
         const currentTotal = currentTableAmount + foodTotal;
         
-        await pool.execute(
-            'UPDATE bookings SET total_amount = ? WHERE id = ?',
+        await pool.query(
+            'UPDATE bookings SET total_amount = $1 WHERE id = $2',
             [currentTotal, id]
         );
         
@@ -448,56 +457,56 @@ class Booking {
     
     // Get bookings by date
     static async getByDate(date) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT b.*, t.table_number, t.table_name 
              FROM bookings b 
              LEFT JOIN tables t ON b.table_id = t.id 
-             WHERE DATE(b.start_time) = ? 
+             WHERE DATE(b.start_time) = $1 
              ORDER BY b.start_time`,
             [date]
         );
         
-        for (let booking of rows) {
+        for (let booking of result.rows) {
             const items = await this.getBookingItems(booking.id);
             booking.items = items;
             booking.food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
         }
         
-        return rows;
+        return result.rows;
     }
     
     // Get revenue by date range
     static async getRevenueWithOrders(startDate, endDate) {
-        const [revenue] = await pool.execute(
+        const result = await pool.query(
             `SELECT DATE(start_time) as date, 
                     COUNT(*) as total_bookings,
                     SUM(total_amount) as total_revenue
              FROM bookings 
              WHERE status = 'completed' 
-             AND DATE(start_time) BETWEEN ? AND ?
+             AND DATE(start_time) BETWEEN $1 AND $2
              GROUP BY DATE(start_time)
              ORDER BY date`,
             [startDate, endDate]
         );
         
-        return revenue;
+        return result.rows;
     }
     
     // Check table availability
     static async checkAvailability(tableId, startTime, endTime) {
-        const [rows] = await pool.execute(
+        const result = await pool.query(
             `SELECT * FROM bookings 
-             WHERE table_id = ? 
+             WHERE table_id = $1 
              AND status IN ('confirmed', 'checked_in')
              AND (
-                (start_time <= ? AND end_time > ?) OR
-                (start_time < ? AND end_time >= ?) OR
-                (start_time >= ? AND end_time <= ?)
+                (start_time <= $2 AND end_time > $2) OR
+                (start_time < $3 AND end_time >= $3) OR
+                (start_time >= $2 AND end_time <= $3)
              )`,
             [tableId, startTime, startTime, endTime, endTime, startTime, endTime]
         );
         
-        return rows.length === 0;
+        return result.rows.length === 0;
     }
 }
 
