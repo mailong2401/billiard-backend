@@ -2,24 +2,33 @@ const { pool } = require('../config/database');
 const { BOOKING_STATUS } = require('../utils/constants');
 const moment = require('moment-timezone');
 
+// Cố định múi giờ Việt Nam
+const VIETNAM_TZ = 'Asia/Ho_Chi_Minh';
+
 class Booking {
     // Store intervals for realtime updates
     static realtimeIntervals = {};
 
+    // Helper: Chuyển đổi thời gian về múi giờ Việt Nam
+    static toVietnamTime(date) {
+        if (!date) return null;
+        return moment(date).tz(VIETNAM_TZ).format('YYYY-MM-DD HH:mm:ss');
+    }
+
+    // Helper: Lấy thời gian hiện tại theo múi giờ Việt Nam
+    static nowVietnam() {
+        return moment().tz(VIETNAM_TZ).format('YYYY-MM-DD HH:mm:ss');
+    }
+
     // Generate booking code
-    // Generate booking code
-static generateBookingCode() {
-    // Cách 1: Lấy thời gian hiện tại (UTC+7)
-    const now = new Date();
-    const utcOffset = 7 * 60 * 60 * 1000; // 7 hours in milliseconds
-    const date = new Date(now.getTime() - utcOffset);
-    
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `BK${year}${month}${day}${random}`;
-}
+    static generateBookingCode() {
+        const now = moment().tz(VIETNAM_TZ);
+        const year = now.year();
+        const month = String(now.month() + 1).padStart(2, '0');
+        const day = String(now.date()).padStart(2, '0');
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        return `BK${year}${month}${day}${random}`;
+    }
     
     // Get all bookings
     static async getAll(filters = {}) {
@@ -45,9 +54,18 @@ static generateBookingCode() {
         }
         
         if (filters.date) {
-            query += ` AND DATE(b.start_time) = $${paramCount}`;
-            values.push(filters.date);
-            paramCount++;
+            // Chuyển đổi filter date sang UTC để query
+            const searchDate = moment.tz(filters.date, 'YYYY-MM-DD', VIETNAM_TZ)
+                .startOf('day')
+                .utc()
+                .format('YYYY-MM-DD HH:mm:ss');
+            const nextDay = moment.tz(filters.date, 'YYYY-MM-DD', VIETNAM_TZ)
+                .endOf('day')
+                .utc()
+                .format('YYYY-MM-DD HH:mm:ss');
+            query += ` AND b.start_time >= $${paramCount} AND b.start_time < $${paramCount + 1}`;
+            values.push(searchDate, nextDay);
+            paramCount += 2;
         }
         
         if (filters.customer_phone) {
@@ -61,6 +79,12 @@ static generateBookingCode() {
         const result = await pool.query(query, values);
         
         for (let booking of result.rows) {
+            // Chuyển đổi thời gian về múi giờ Việt Nam trước khi trả về
+            booking.start_time = this.toVietnamTime(booking.start_time);
+            booking.end_time = this.toVietnamTime(booking.end_time);
+            booking.created_at = this.toVietnamTime(booking.created_at);
+            booking.updated_at = this.toVietnamTime(booking.updated_at);
+            
             const items = await this.getBookingItems(booking.id);
             booking.items = items;
             booking.food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
@@ -80,6 +104,12 @@ static generateBookingCode() {
              ORDER BY bi.created_at ASC`,
             [bookingId]
         );
+        
+        for (let item of result.rows) {
+            item.created_at = this.toVietnamTime(item.created_at);
+            item.updated_at = this.toVietnamTime(item.updated_at);
+        }
+        
         return result.rows;
     }
     
@@ -94,6 +124,11 @@ static generateBookingCode() {
         );
         
         if (result.rows[0]) {
+            result.rows[0].start_time = this.toVietnamTime(result.rows[0].start_time);
+            result.rows[0].end_time = this.toVietnamTime(result.rows[0].end_time);
+            result.rows[0].created_at = this.toVietnamTime(result.rows[0].created_at);
+            result.rows[0].updated_at = this.toVietnamTime(result.rows[0].updated_at);
+            
             const items = await this.getBookingItems(id);
             result.rows[0].items = items;
             result.rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
@@ -114,6 +149,10 @@ static generateBookingCode() {
         );
         
         if (result.rows[0]) {
+            result.rows[0].start_time = this.toVietnamTime(result.rows[0].start_time);
+            result.rows[0].end_time = this.toVietnamTime(result.rows[0].end_time);
+            result.rows[0].created_at = this.toVietnamTime(result.rows[0].created_at);
+            
             const items = await this.getBookingItems(result.rows[0].id);
             result.rows[0].items = items;
             result.rows[0].food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
@@ -139,12 +178,16 @@ static generateBookingCode() {
         
         const bookingCode = this.generateBookingCode();
         
+        // Chuyển đổi thời gian từ local (Việt Nam) sang UTC để lưu vào DB
+        const startTimeUTC = moment.tz(start_time, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
+        const endTimeUTC = moment.tz(end_time, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
+        
         const result = await pool.query(
             `INSERT INTO bookings (booking_code, table_id, customer_name, customer_phone, 
                                    start_time, end_time, duration_hours, total_amount, notes, created_by, status)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING id`,
-            [bookingCode, table_id, customer_name, customer_phone, start_time, end_time, 
+            [bookingCode, table_id, customer_name, customer_phone, startTimeUTC, endTimeUTC, 
              duration_hours, total_amount || 0, notes, created_by, BOOKING_STATUS.PENDING]
         );
         
@@ -162,8 +205,13 @@ static generateBookingCode() {
         
         for (const field of allowedFields) {
             if (data[field] !== undefined) {
+                let value = data[field];
+                // Chuyển đổi thời gian nếu là start_time hoặc end_time
+                if (field === 'start_time' || field === 'end_time') {
+                    value = moment.tz(value, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
+                }
                 updates.push(`${field} = $${paramCount}`);
-                values.push(data[field]);
+                values.push(value);
                 paramCount++;
             }
         }
@@ -199,7 +247,7 @@ static generateBookingCode() {
             throw new Error('Product not found');
         }
         
-        const price = productResult.rows[0].price;
+        const price = Number(productResult.rows[0].price);
         const subtotal = price * quantity;
         
         const result = await pool.query(
@@ -223,7 +271,8 @@ static generateBookingCode() {
             throw new Error('Item not found');
         }
         
-        const subtotal = itemResult.rows[0].price * quantity;
+        const price = Number(itemResult.rows[0].price);
+        const subtotal = price * quantity;
         
         await pool.query(
             'UPDATE booking_items SET quantity = $1, subtotal = $2 WHERE id = $3',
@@ -251,6 +300,12 @@ static generateBookingCode() {
              WHERE bi.id = $1`,
             [itemId]
         );
+        
+        if (result.rows[0]) {
+            result.rows[0].created_at = this.toVietnamTime(result.rows[0].created_at);
+            result.rows[0].updated_at = this.toVietnamTime(result.rows[0].updated_at);
+        }
+        
         return result.rows[0] || null;
     }
     
@@ -290,11 +345,14 @@ static generateBookingCode() {
         const booking = await this.getById(id);
         if (!booking) return null;
         
-        const actualStartTime = moment().tz('Asia/Ho_Chi_Minh').format('YYYY-MM-DD HH:mm:ss');
+        const actualStartTime = this.nowVietnam();
+        
+        // Chuyển đổi sang UTC để lưu vào DB
+        const startTimeUTC = moment.tz(actualStartTime, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
         
         await pool.query(
             'UPDATE bookings SET status = $1, start_time = $2, total_amount = 0 WHERE id = $3',
-            [BOOKING_STATUS.CHECKED_IN, actualStartTime, id]
+            [BOOKING_STATUS.CHECKED_IN, startTimeUTC, id]
         );
         
         const Table = require('./Table');
@@ -321,16 +379,20 @@ static generateBookingCode() {
             throw new Error('Table not found');
         }
         
-        const start = moment(booking.start_time).tz('Asia/Ho_Chi_Minh');
-        const end = moment(actualEndTime).tz('Asia/Ho_Chi_Minh');
+        // Chuyển đổi thời gian từ string (đã ở VN) sang moment object
+        const start = moment.tz(booking.start_time, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ);
+        const end = moment.tz(actualEndTime, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ);
         const hoursPlayed = end.diff(start, 'hours', true);
         
-        const actualTableAmount = Math.ceil(hoursPlayed) * table.price_per_hour;
+        const actualTableAmount = Math.ceil(hoursPlayed) * Number(table.price_per_hour);
         
         const items = await this.getBookingItems(id);
         const foodTotal = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
         
         const totalAmount = actualTableAmount + foodTotal;
+        
+        // Chuyển đổi end time sang UTC để lưu vào DB
+        const endTimeUTC = moment.tz(actualEndTime, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
         
         await pool.query(
             `UPDATE bookings SET 
@@ -339,7 +401,7 @@ static generateBookingCode() {
                 total_amount = $3,
                 duration_hours = $4
             WHERE id = $5`,
-            [BOOKING_STATUS.COMPLETED, actualEndTime, totalAmount, hoursPlayed, id]
+            [BOOKING_STATUS.COMPLETED, endTimeUTC, totalAmount, hoursPlayed, id]
         );
         
         await Table.updateStatus(booking.table_id, 'available');
@@ -365,11 +427,11 @@ static generateBookingCode() {
         
         if (!table) return null;
         
-        const start = moment(booking.start_time).tz('Asia/Ho_Chi_Minh');
-        const now = moment().tz('Asia/Ho_Chi_Minh');
+        const start = moment.tz(booking.start_time, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ);
+        const now = moment().tz(VIETNAM_TZ);
         const hoursPlayed = now.diff(start, 'hours', true);
         
-        const currentTableAmount = Math.ceil(hoursPlayed) * table.price_per_hour;
+        const currentTableAmount = Math.ceil(hoursPlayed) * Number(table.price_per_hour);
         
         const items = await this.getBookingItems(id);
         const foodTotal = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
@@ -466,12 +528,15 @@ static generateBookingCode() {
             `SELECT b.*, t.table_number, t.table_name 
              FROM bookings b 
              LEFT JOIN tables t ON b.table_id = t.id 
-             WHERE DATE(b.start_time) = $1 
+             WHERE DATE(b.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') = $1 
              ORDER BY b.start_time`,
             [date]
         );
         
         for (let booking of result.rows) {
+            booking.start_time = this.toVietnamTime(booking.start_time);
+            booking.end_time = this.toVietnamTime(booking.end_time);
+            
             const items = await this.getBookingItems(booking.id);
             booking.items = items;
             booking.food_total = items.reduce((sum, item) => sum + Number(item.subtotal), 0);
@@ -483,13 +548,13 @@ static generateBookingCode() {
     // Get revenue by date range
     static async getRevenueWithOrders(startDate, endDate) {
         const result = await pool.query(
-            `SELECT DATE(start_time) as date, 
+            `SELECT DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') as date, 
                     COUNT(*) as total_bookings,
                     SUM(total_amount) as total_revenue
              FROM bookings 
              WHERE status = 'completed' 
-             AND DATE(start_time) BETWEEN $1 AND $2
-             GROUP BY DATE(start_time)
+             AND DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN $1 AND $2
+             GROUP BY DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')
              ORDER BY date`,
             [startDate, endDate]
         );
@@ -499,6 +564,10 @@ static generateBookingCode() {
     
     // Check table availability
     static async checkAvailability(tableId, startTime, endTime) {
+        // Chuyển đổi thời gian từ local (Việt Nam) sang UTC để query
+        const startTimeUTC = moment.tz(startTime, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
+        const endTimeUTC = moment.tz(endTime, 'YYYY-MM-DD HH:mm:ss', VIETNAM_TZ).utc().format('YYYY-MM-DD HH:mm:ss');
+        
         const result = await pool.query(
             `SELECT * FROM bookings 
              WHERE table_id = $1 
@@ -508,7 +577,7 @@ static generateBookingCode() {
                 (start_time < $3 AND end_time >= $3) OR
                 (start_time >= $2 AND end_time <= $3)
              )`,
-            [tableId, startTime, startTime, endTime, endTime, startTime, endTime]
+            [tableId, startTimeUTC, startTimeUTC, endTimeUTC, endTimeUTC, startTimeUTC, endTimeUTC]
         );
         
         return result.rows.length === 0;
