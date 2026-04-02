@@ -1,8 +1,9 @@
 const TableController = require('../controllers/TableController');
 const BookingController = require('../controllers/BookingController');
 const ProductController = require('../controllers/ProductController');
+const AuthController = require('../controllers/AuthController');
 const Table = require('../models/Table'); // Thêm import Table model
-const { SOCKET_EVENTS } = require('../utils/constants');
+const { SOCKET_EVENTS, USER_EVENTS } = require('../utils/constants'); // Thêm USER_EVENTS
 
 class SocketHandler {
     constructor(io) {
@@ -10,11 +11,42 @@ class SocketHandler {
         this.tableController = new TableController(io);
         this.bookingController = new BookingController(io);
         this.productController = new ProductController(io);
+        this.authController = new AuthController(io);
     }
     
     initialize() {
         this.io.on('connection', (socket) => {
             console.log(`🟢 Client connected: ${socket.id}`);
+
+
+      socket.on(USER_EVENTS.LOGIN, (data, callback) => 
+                this.authController.handleLogin(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.REGISTER, (data, callback) => 
+                this.authController.handleRegister(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.GET_CURRENT_USER, (data, callback) => 
+                this.authController.handleGetCurrentUser(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.GET_USERS, (data, callback) => 
+                this.authController.handleGetUsers(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.UPDATE_USER, (data, callback) => 
+                this.authController.handleUpdateUser(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.CHANGE_PASSWORD, (data, callback) => 
+                this.authController.handleChangePassword(socket, data, callback)
+            );
+            
+            socket.on(USER_EVENTS.GET_USER_STATISTICS, (data, callback) => 
+                this.authController.handleGetUserStatistics(socket, data, callback)
+            );
+
             
             // ========== TABLE EVENTS ==========
             socket.on(SOCKET_EVENTS.GET_TABLES, (data, callback) => 

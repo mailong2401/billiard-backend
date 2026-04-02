@@ -166,6 +166,22 @@ const TIMEZONE = {
     UTC: 'UTC'
 };
 
+const USER_EVENTS = {
+    LOGIN: 'login',
+    REGISTER: 'register',
+    GET_CURRENT_USER: 'get-current-user',
+    GET_USERS: 'get-users',
+    UPDATE_USER: 'update-user',
+    CHANGE_PASSWORD: 'change-password',
+    GET_USER_STATISTICS: 'get-user-statistics',
+    
+    // Response events
+    USER_LOGGED_IN: 'user-logged-in',
+    USER_REGISTERED: 'user-registered',
+    USER_UPDATED: 'user-updated',
+    USER_DELETED: 'user-deleted'
+};
+
 module.exports = {
     TABLE_STATUS,
     TABLE_TYPE,
@@ -176,5 +192,7 @@ module.exports = {
     SOCKET_EVENTS,
     PRICE_PER_HOUR,
     OPERATING_HOURS,
+    USER_EVENTS,
     TIMEZONE
 };
+
