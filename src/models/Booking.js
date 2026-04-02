@@ -7,14 +7,19 @@ class Booking {
     static realtimeIntervals = {};
 
     // Generate booking code
-    static generateBookingCode() {
-        const date = new Date() - 7 * 60 * 60 * 1000;
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return `BK${year}${month}${day}${random}`;
-    }
+    // Generate booking code
+static generateBookingCode() {
+    // Cách 1: Lấy thời gian hiện tại (UTC+7)
+    const now = new Date();
+    const utcOffset = 7 * 60 * 60 * 1000; // 7 hours in milliseconds
+    const date = new Date(now.getTime() - utcOffset);
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `BK${year}${month}${day}${random}`;
+}
     
     // Get all bookings
     static async getAll(filters = {}) {
