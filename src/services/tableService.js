@@ -1,4 +1,5 @@
 const Table = require('../models/Table');
+const { pool } = require('../config/database'); // Thêm import pool
 const { TABLE_STATUS } = require('../utils/constants');
 
 class TableService {
@@ -71,13 +72,20 @@ class TableService {
         return await Table.updateStatus(id, status);
     }
     
-    // Get active bookings for table
+    // Get active bookings for table (PostgreSQL version)
     async getActiveBookings(tableId) {
-        const [rows] = await pool.execute(
-            'SELECT COUNT(*) as count FROM bookings WHERE table_id = ? AND status IN ("confirmed", "checked_in")',
-            [tableId]
-        );
-        return rows[0].count;
+        try {
+            const result = await pool.query(
+                `SELECT COUNT(*) as count FROM bookings 
+                 WHERE table_id = $1 
+                 AND status IN ('confirmed', 'checked_in')`,
+                [tableId]
+            );
+            return parseInt(result.rows[0].count);
+        } catch (error) {
+            console.error('Error in getActiveBookings:', error);
+            return 0;
+        }
     }
     
     // Get table statistics
