@@ -582,6 +582,64 @@ class Booking {
         
         return result.rows.length === 0;
     }
+  static async getRevenueWithOrders(startDate, endDate) {
+    const result = await pool.query(
+        `SELECT DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') as date, 
+                COUNT(*) as total_bookings,
+                SUM(total_amount) as total_revenue
+         FROM bookings 
+         WHERE status = 'completed' 
+         AND DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN $1 AND $2
+         GROUP BY DATE(start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')
+         ORDER BY date`,
+        [startDate, endDate]
+    );
+    
+    return result.rows;
+}
+  // Get detailed revenue report
+static async getRevenueReport(startDate, endDate) {
+    const result = await pool.query(
+        `SELECT 
+            DATE(b.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') as date,
+            COUNT(DISTINCT b.id) as total_bookings,
+            COUNT(bi.id) as total_items,
+            SUM(b.total_amount) as total_revenue,
+            SUM(bi.subtotal) as food_revenue,
+            SUM(b.total_amount) - SUM(COALESCE(bi.subtotal, 0)) as table_revenue
+         FROM bookings b
+         LEFT JOIN booking_items bi ON b.id = bi.booking_id
+         WHERE b.status = 'completed'
+         AND DATE(b.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN $1 AND $2
+         GROUP BY DATE(b.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')
+         ORDER BY date`,
+        [startDate, endDate]
+    );
+    
+    return result.rows;
+}
+  // Get top selling products
+static async getTopProducts(startDate, endDate, limit = 10) {
+    const result = await pool.query(
+        `SELECT 
+            p.id,
+            p.name,
+            p.category_name,
+            SUM(bi.quantity) as total_quantity,
+            SUM(bi.subtotal) as total_revenue
+         FROM booking_items bi
+         JOIN bookings b ON bi.booking_id = b.id
+         JOIN products p ON bi.product_id = p.id
+         WHERE b.status = 'completed'
+         AND DATE(b.start_time AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh') BETWEEN $1 AND $2
+         GROUP BY p.id, p.name, p.category_name
+         ORDER BY total_revenue DESC
+         LIMIT $3`,
+        [startDate, endDate, limit]
+    );
+    
+    return result.rows;
+}
 }
 
 module.exports = Booking;

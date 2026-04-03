@@ -48,6 +48,23 @@ class SocketHandler {
             );
 
             
+      // ========== REPORT EVENTS ==========
+socket.on('get-revenue-report', (data, callback) => 
+    this.bookingController.handleGetRevenueReport(socket, data, callback)
+);
+
+socket.on('get-revenue-with-orders', (data, callback) => 
+    this.bookingController.handleGetRevenueWithOrders(socket, data, callback)
+);
+
+socket.on('get-top-products', (data, callback) => 
+    this.bookingController.handleGetTopProducts(socket, data, callback)
+);
+
+socket.on('get-dashboard-stats', (data, callback) => 
+    this.bookingController.handleGetDashboardStats(socket, data, callback)
+);
+
             // ========== TABLE EVENTS ==========
             socket.on(SOCKET_EVENTS.GET_TABLES, (data, callback) => 
                 this.tableController.handleGetTables(socket, data, callback)

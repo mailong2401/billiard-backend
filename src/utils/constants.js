@@ -58,6 +58,12 @@ const SOCKET_EVENTS = {
     UPDATE_TABLE: 'update-table',
     DELETE_TABLE: 'delete-table',
     UPDATE_TABLE_STATUS: 'update-table-status',
+  
+    // Report events
+    GET_REVENUE_REPORT: 'get-revenue-report',
+    GET_REVENUE_WITH_ORDERS: 'get-revenue-with-orders',
+    GET_TOP_PRODUCTS: 'get-top-products',
+    GET_DASHBOARD_STATS: 'get-dashboard-stats',
     
     // Booking events
     CREATE_BOOKING: 'create-booking',

@@ -399,10 +399,34 @@ class BookingController {
         }
     }
     
+    async handleCheckAvailability(socket, data, callback) {
+        try {
+            const { tableId, startTime, endTime } = data;
+            const availability = await Booking.checkAvailability(tableId, startTime, endTime);
+            
+            callback({
+                success: true,
+                data: availability
+            });
+        } catch (error) {
+            callback({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+    
+    // ================= REPORT & STATISTICS METHODS =================
+    
     async handleGetRevenueReport(socket, data, callback) {
         try {
             const { startDate, endDate } = data;
-            const report = await Booking.getRevenueWithOrders(startDate, endDate);
+            
+            if (!startDate || !endDate) {
+                throw new Error('Start date and end date are required');
+            }
+            
+            const report = await Booking.getRevenueReport(startDate, endDate);
             
             callback({
                 success: true,
@@ -417,16 +441,103 @@ class BookingController {
         }
     }
     
-    async handleCheckAvailability(socket, data, callback) {
+    async handleGetRevenueWithOrders(socket, data, callback) {
         try {
-            const { tableId, startTime, endTime } = data;
-            const availability = await Booking.checkAvailability(tableId, startTime, endTime);
+            const { startDate, endDate } = data;
+            
+            if (!startDate || !endDate) {
+                throw new Error('Start date and end date are required');
+            }
+            
+            const report = await Booking.getRevenueWithOrders(startDate, endDate);
             
             callback({
                 success: true,
-                data: availability
+                data: report
             });
         } catch (error) {
+            console.error('Error in handleGetRevenueWithOrders:', error);
+            callback({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+    
+    async handleGetTopProducts(socket, data, callback) {
+        try {
+            const { startDate, endDate, limit = 10 } = data;
+            
+            if (!startDate || !endDate) {
+                throw new Error('Start date and end date are required');
+            }
+            
+            const topProducts = await Booking.getTopProducts(startDate, endDate, limit);
+            
+            callback({
+                success: true,
+                data: topProducts
+            });
+        } catch (error) {
+            console.error('Error in handleGetTopProducts:', error);
+            callback({
+                success: false,
+                error: error.message
+            });
+        }
+    }
+    
+    async handleGetDashboardStats(socket, data, callback) {
+        try {
+            const today = new Date();
+            const todayStr = today.toISOString().slice(0, 10);
+            
+            // Get last 7 days
+            const lastWeek = new Date(today);
+            lastWeek.setDate(today.getDate() - 7);
+            const lastWeekStr = lastWeek.toISOString().slice(0, 10);
+            
+            // Get last 30 days
+            const lastMonth = new Date(today);
+            lastMonth.setDate(today.getDate() - 30);
+            const lastMonthStr = lastMonth.toISOString().slice(0, 10);
+            
+            // Get this month
+            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const startOfMonthStr = startOfMonth.toISOString().slice(0, 10);
+            
+            const [todayStats, weekStats, monthStats, lastWeekStats, topProducts] = await Promise.all([
+                Booking.getRevenueWithOrders(todayStr, todayStr),
+                Booking.getRevenueWithOrders(lastWeekStr, todayStr),
+                Booking.getRevenueWithOrders(startOfMonthStr, todayStr),
+                Booking.getRevenueWithOrders(lastWeekStr, lastWeekStr),
+                Booking.getTopProducts(lastMonthStr, todayStr, 5)
+            ]);
+            
+            const todayRevenue = todayStats[0]?.total_revenue || 0;
+            const todayBookings = todayStats[0]?.total_bookings || 0;
+            const weekRevenue = weekStats.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+            const monthRevenue = monthStats.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+            const lastWeekRevenue = lastWeekStats.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+            
+            // Calculate growth rate
+            const growthRate = lastWeekRevenue > 0 
+                ? Math.round(((weekRevenue - lastWeekRevenue) / lastWeekRevenue) * 100)
+                : weekRevenue > 0 ? 100 : 0;
+            
+            callback({
+                success: true,
+                data: {
+                    todayRevenue,
+                    todayBookings,
+                    weekRevenue,
+                    monthRevenue,
+                    growthRate,
+                    topProducts
+                }
+            });
+        } catch (error) {
+            console.error('Error in handleGetDashboardStats:', error);
             callback({
                 success: false,
                 error: error.message
